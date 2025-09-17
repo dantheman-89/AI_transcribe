@@ -21,11 +21,14 @@ def setup_model():
     """Initialize the Whisper model."""
     print(f"Loading Whisper model: {MODEL_SIZE}")
     try:
-        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+        # Try to load model with internet access for first-time download
+        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", local_files_only=False)
         print("Model loaded successfully!")
         return model
     except Exception as e:
         print(f"Error loading model: {e}")
+        print("\nNote: On first run, the model needs to be downloaded from the internet.")
+        print("Make sure you have an internet connection and try again.")
         sys.exit(1)
 
 
@@ -73,6 +76,7 @@ def format_transcription(segments):
     
     formatted_text = []
     current_paragraph = []
+    prev_end = 0.0
     
     for segment in segments:
         text = segment.text.strip()
@@ -81,12 +85,8 @@ def format_transcription(segments):
         timestamp = f"[{segment.start:.2f}s - {segment.end:.2f}s]"
         
         # Simple paragraph separation logic:
-        # - Create new paragraph after silence longer than 2 seconds
-        # - Or when sentence ends with period, question mark, or exclamation
-        if current_paragraph and (
-            segment.start - prev_end > 2.0 or  # 2+ second gap
-            current_paragraph[-1].strip().endswith(('.', '!', '?'))
-        ):
+        # Create new paragraph after silence longer than 2 seconds
+        if current_paragraph and (segment.start - prev_end > 2.0):
             # Join current paragraph and add to formatted text
             paragraph_text = ' '.join(current_paragraph)
             formatted_text.append(paragraph_text)
