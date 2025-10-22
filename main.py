@@ -12,27 +12,48 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 
 # Configuration
-AUDIO_FILE_PATH = "input/sample.m4a"  # Hard-coded audio file path
+AUDIO_FILE_PATH = "input/Joyce pivot meeting 1.m4a"  # Hard-coded audio file path
 OUTPUT_DIR = "output"  # Hard-coded output directory
-MODEL_SIZE = "base"  # Whisper model size (tiny, base, small, medium, large)
+MODEL_SIZE = "medium"  # Whisper model size (tiny, base, small, medium, large)
+SET_LANGUAGE = None
+SET_MULTILINGUAL = False
 
 
 def setup_model():
     """Initialize the Whisper model."""
     print(f"Loading Whisper model: {MODEL_SIZE}")
     try:
-        # Try to load model with internet access for first-time download
-        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", local_files_only=False)
-        print("Model loaded successfully!")
+        print("Attempting to initialize on CUDA (float16)...")
+        model = WhisperModel(
+            MODEL_SIZE,
+            device="cuda",
+            compute_type="float16",
+            local_files_only=False,
+        )
+        print("Model loaded successfully on CUDA!")
         return model
     except Exception as e:
+        print(f"CUDA initialization failed ({e}). Trying CPU (int8) instead...")
+        try:
+            model = WhisperModel(
+                MODEL_SIZE,
+                device="cpu",
+                compute_type="int8",
+                local_files_only=False,
+            )
+            print("Model loaded successfully on CPU!")
+            return model
+        except Exception as cpu_error:
+            print(f"CPU fallback also failed: {cpu_error}")
+            e = cpu_error
+
         print(f"Error loading model: {e}")
         print("\nNote: On first run, the model needs to be downloaded from the internet.")
         print("Make sure you have an internet connection and try again.")
         sys.exit(1)
 
 
-def transcribe_audio(model, audio_path):
+def transcribe_audio(model, audio_path, language=None, multilingual=False):
     """
     Transcribe audio file using faster-whisper.
     
@@ -49,11 +70,14 @@ def transcribe_audio(model, audio_path):
         segments, info = model.transcribe(
             audio_path,
             beam_size=5,
-            language=None,  # Auto-detect language
-            task="transcribe"
+            language=language,  # default is None which auto-detects language
+            multilingual=multilingual, # default is False; True needs to pair with language=None
+            task="transcribe" 
         )
         
-        print(f"Detected language: {info.language} (probability: {info.language_probability:.2f})")
+        if language is None: print(f"Detected language: {info.language} (probability: {info.language_probability:.2f})") 
+        else: print(f"Selected language: {language}")  
+
         print(f"Duration: {info.duration:.2f} seconds")
         
         return segments, info
@@ -149,9 +173,9 @@ def main():
     
     # Initialize model
     model = setup_model()
-    
+
     # Transcribe audio
-    segments, info = transcribe_audio(model, AUDIO_FILE_PATH)
+    segments, info = transcribe_audio(model, AUDIO_FILE_PATH, language=SET_LANGUAGE, multilingual=SET_MULTILINGUAL)
     
     # Format transcription
     transcribed_text = format_transcription(segments)
