@@ -1,0 +1,2 @@
+# This file ensures the input directory is tracked by git
+# Audio files placed in this directory will be ignored by git
